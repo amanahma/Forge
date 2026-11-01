@@ -11,6 +11,37 @@ from backend.app.advisory.llm_provider import get_llm_provider
 class AdvisoryService:
     """End-to-end Advisory Service providing spoken-friendly, grounded, crop-specific guidance."""
 
+    def _direct_answer(self, query: str, ctx: Dict[str, Any]) -> str:
+        q = (query or "").strip().lower()
+        if not q:
+            return ""
+        rain7, rain_today = ctx["rain_7d_mm"], ctx["rain_today_mm"]
+        tmax = ctx["max_temp"]
+        rainfed = ctx["irrigation_type"] == "Rainfed"
+
+        if any(w in q for w in ["irrigat", "water", "sinchai", "सिंचाई", "पानी"]):
+            if rain7 >= 40 or rain_today >= 20:
+                return (f"No, do not irrigate this week. About {rain7} mm of rain "
+                        f"is expected in 7 days, so the field has enough water.")
+            if rain7 < 10:
+                if rainfed:
+                    return (f"Only {rain7} mm of rain is expected in 7 days and the "
+                            f"max temperature is {tmax}°C. Your farm is rainfed, so "
+                            f"give one light irrigation only if you have a water source.")
+                return (f"Yes, irrigate this week. Only {rain7} mm of rain is "
+                        f"expected and the max temperature is {tmax}°C. Irrigate early morning or evening.")
+            return (f"Light rain ({rain7} mm) is expected. Check soil 5 cm deep and "
+                    f"irrigate only if it is dry.")
+
+        if any(w in q for w in ["sell", "hold", "price", "mandi", "profit", "earn", "भाव", "बेच"]):
+            action = "hold your stock" if ctx["mandi_signal"] == "HOLD" else "sell now"
+            return (f"Today's mandi price is ₹{int(ctx['mandi_price']):,} per quintal "
+                    f"and the trend is {ctx['mandi_trend']}. The signal says {action}. "
+                    f"This tool cannot work out your exact profit because it does not know your costs.")
+
+        return ("I could not match your question to a topic I can answer. "
+                "I can answer about irrigation and selling. The standard advisory is below.")
+
     def generate_advisory(
         self,
         district: str,
@@ -43,8 +74,21 @@ class AdvisoryService:
         mandi = mandi_adapter.get_price_info(crop_norm, district=dist_norm)
         soil = soil_adapter.get_soil_data(dist_norm)
         
-        # Determine dominant hazard
-        primary_hazard = "drought" if dist_norm == "solapur" else ("flood" if dist_norm == "darbhanga" else "heatwave")
+        # Determine dominant hazard based on live weather data with district baseline fallback
+        rain_today = float(weather.get("rainfall_today_mm", 0.0))
+        rain_7d = float(weather.get("rainfall_7d_total_mm", 0.0))
+        max_temp_val = float(weather.get("max_temp", 33.0))
+
+        if rain_today >= 25.0 or rain_7d >= 80.0:
+            primary_hazard = "flood"
+        elif max_temp_val >= 37.0:
+            primary_hazard = "heatwave"
+        elif rain_7d < 15.0 and max_temp_val >= 32.0:
+            primary_hazard = "drought"
+        else:
+            district_defaults = {"solapur": "drought", "darbhanga": "flood", "cuddalore": "heatwave"}
+            primary_hazard = district_defaults.get(dist_norm, "heatwave")
+
         rule = rag_engine.retrieve_top_rule(crop=crop_norm, hazard=primary_hazard)
 
         # 2. Build structured ground-truth context
@@ -67,11 +111,15 @@ class AdvisoryService:
         }
 
         # 3. Create Spoken Advisory (English baseline)
+        rain_desc = f"minimal rain ({verified_context['rain_7d_mm']} mm in 7 days)" if verified_context['rain_7d_mm'] > 0 else "zero rain forecast"
+        crop_organ = "flower and boll" if crop_norm == "cotton" else ("pod and flower" if crop_norm == "soybean" else ("panicle and tiller" if crop_norm in ["rice", "wheat"] else "foliage and tuber"))
+        irrigation_advice = "Apply straw mulching to conserve moisture since the farm is rainfed." if irrigation_type == "Rainfed" else f"Provide light evening {irrigation_type.lower()} irrigation to cool the crop canopy."
+
         if primary_hazard == "drought":
             spoken_en = (
                 f"{crop.capitalize()} in {district.capitalize()} faces dry spell stress with maximum temperature reaching {verified_context['max_temp']}°C "
-                f"and zero rain forecast. Apply straw mulching immediately at 5 tonnes per hectare to conserve soil moisture. "
-                f"Spray 1% Potassium Nitrate in the early morning to protect pod development. "
+                f"and {rain_desc}. Apply straw mulching immediately at 5 tonnes per hectare to conserve soil moisture. "
+                f"Spray 1% Potassium Nitrate in the early morning to protect {crop_organ} development. "
                 f"{district.capitalize()} mandi price is ₹{int(verified_context['mandi_price']):,} per quintal with {verified_context['mandi_trend']} trend; "
                 f"{'hold grain for 2 weeks rather than selling at harvest dip' if verified_context['mandi_signal'] == 'HOLD' else 'sell now to capitalize on current rates'}."
             )
@@ -90,8 +138,8 @@ class AdvisoryService:
         else: # Heatwave / coastal
             spoken_en = (
                 f"{crop.capitalize()} in {district.capitalize()} is under thermal stress with maximum temperature of {verified_context['max_temp']}°C. "
-                f"Provide light evening sprinkler irrigation to cool the crop canopy. "
-                f"Foliar spray of 2% DAP plus 1% Potassium Chloride will prevent flower and boll shedding. "
+                f"{irrigation_advice} "
+                f"Foliar spray of 2% DAP plus 1% Potassium Chloride will prevent {crop_organ} shedding. "
                 f"{district.capitalize()} mandi price is ₹{int(verified_context['mandi_price']):,} per quintal; "
                 f"{'hold stock as prices are trending up' if verified_context['mandi_signal'] == 'HOLD' else 'sell now before summer arrivals surge'}."
             )
@@ -155,7 +203,10 @@ class AdvisoryService:
                 {"day_range": "Day 5-7", "action": "Erect shade netting for nursery / vegetable patches; assess boll/fruit retention.", "urgency": "low"}
             ]
 
+        direct_answer = self._direct_answer(query_text, verified_context)
+
         return {
+            "direct_answer": direct_answer,
             "spoken_advisory": spoken_final,
             "english_translation": spoken_en if lang_norm != "en" else None,
             "why_rationale": why_final,

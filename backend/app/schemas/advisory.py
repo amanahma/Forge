@@ -28,6 +28,7 @@ class MandiSignal(BaseModel):
     data_source: str # "data.gov.in Agmarknet (Verified)"
 
 class AdvisoryResponse(BaseModel):
+    direct_answer: Optional[str] = None
     spoken_advisory: str # Max ~80 words, spoken friendly, in selected language
     english_translation: Optional[str] = None # For judge audit if language is non-English
     why_rationale: str # One-line explanation

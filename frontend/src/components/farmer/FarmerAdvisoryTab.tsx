@@ -374,6 +374,14 @@ export const FarmerAdvisoryTab: React.FC<FarmerAdvisoryTabProps> = ({
                 </button>
               </div>
 
+              {/* Direct Answer to User Question */}
+              {advisoryData.direct_answer && (
+                <div className="bg-emerald-500/10 border border-emerald-500/40 rounded-xl p-4 mb-4">
+                  <span className="text-[11px] uppercase font-bold text-emerald-400">Answer to your question</span>
+                  <p className="text-sm text-slate-100 mt-1">{advisoryData.direct_answer}</p>
+                </div>
+              )}
+
               {/* Spoken Paragraph */}
               <div className="bg-slate-800/40 border border-slate-700/60 rounded-xl p-5 mb-4">
                 <p className="text-base sm:text-lg text-slate-100 font-medium leading-relaxed">
