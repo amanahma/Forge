@@ -42,6 +42,15 @@ app.include_router(risk_router, prefix=settings.API_V1_STR)
 app.include_router(logistics_router, prefix=settings.API_V1_STR)
 app.include_router(mock_router, prefix=settings.API_V1_STR)
 
+@app.get("/")
+def root():
+    return {
+        "status": "online",
+        "service": settings.PROJECT_NAME,
+        "docs": "/docs",
+        "health": "/health"
+    }
+
 @app.get("/health")
 def health_check():
     return {
