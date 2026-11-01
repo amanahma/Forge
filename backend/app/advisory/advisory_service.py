@@ -19,6 +19,7 @@ class AdvisoryService:
         language: str = "en",
         soil_type: str = "Black",
         irrigation_type: str = "Rainfed",
+        land_size_acres: float = 2.5,
         query_text: str = ""
     ) -> Dict[str, Any]:
         dist_norm = district.strip().lower()
@@ -33,7 +34,10 @@ class AdvisoryService:
             "darbhanga": (26.1542, 85.8918),
             "cuddalore": (11.7480, 79.7714)
         }
-        lat, lon = center_coords.get(dist_norm, (17.6599, 75.9064))
+        if dist_norm not in center_coords:
+            raise ValueError(f"Unsupported district '{district}'. Supported districts are: Solapur, Darbhanga, Cuddalore.")
+
+        lat, lon = center_coords[dist_norm]
         
         weather = weather_adapter.get_forecast(lat, lon, district_hint=dist_norm)
         mandi = mandi_adapter.get_price_info(crop_norm, district=dist_norm)
@@ -48,6 +52,7 @@ class AdvisoryService:
             "district": district.capitalize(),
             "village": village,
             "crop": crop.capitalize(),
+            "land_size_acres": land_size_acres,
             "max_temp": weather.get("max_temp", 33.0),
             "min_temp": weather.get("min_temp", 22.0),
             "current_temp": weather.get("current_temp", 30.0),
@@ -162,9 +167,10 @@ class AdvisoryService:
                 "crop": crop.capitalize(),
                 "current_modal_price": verified_context["mandi_price"],
                 "price_trend": verified_context["mandi_trend"],
+                "trend_7d_pct": mandi.get("trend_7d_pct", 0.0),
                 "signal": verified_context["mandi_signal"],
                 "rationale": mandi.get("rationale", "Market price tracking regional trend."),
-                "data_source": "data.gov.in Agmarknet (Verified)"
+                "data_source": mandi.get("data_source", "data.gov.in Agmarknet (Verified)")
             },
             "weather_summary": {
                 "max_temp_c": verified_context["max_temp"],
@@ -176,7 +182,7 @@ class AdvisoryService:
                 "weather": weather.get("source", "Open-Meteo Live"),
                 "mandi": mandi.get("data_source", "Agmarknet Historical"),
                 "agronomy": "ICAR-CRIDA / NBSS&LUP Standard Guidelines",
-                "guardrail_status": "GROUNDED_AND_VERIFIED"
+                "guardrail_status": "GROUNDED_AND_VERIFIED" if is_valid else f"FLAGGED ({len(violations)} violations)"
             }
         }
 

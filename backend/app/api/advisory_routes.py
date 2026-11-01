@@ -40,15 +40,20 @@ def get_farmer_advisory(req: AdvisoryRequest, db: Session = Depends(get_db)):
             req.language = p.language
             req.soil_type = p.soil_type
             req.irrigation_type = p.irrigation_type
+            req.land_size_acres = p.land_size_acres
 
-    res = advisory_service.generate_advisory(
-        district=req.district,
-        crop=req.crop_type,
-        village=req.village or "Central Village",
-        language=req.language or "en",
-        soil_type=req.soil_type or "Black",
-        irrigation_type=req.irrigation_type or "Rainfed",
-        query_text=req.query_text or ""
-    )
-    return res
+    try:
+        res = advisory_service.generate_advisory(
+            district=req.district,
+            crop=req.crop_type,
+            village=req.village or "Central Village",
+            language=req.language or "en",
+            soil_type=req.soil_type or "Black",
+            irrigation_type=req.irrigation_type or "Rainfed",
+            land_size_acres=req.land_size_acres or 2.5,
+            query_text=req.query_text or ""
+        )
+        return res
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 

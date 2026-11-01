@@ -11,14 +11,21 @@ export async function fetchAdvisory(params: {
   language?: string;
   soil_type?: string;
   irrigation_type?: string;
+  land_size_acres?: number;
   query_text?: string;
 }) {
   const res = await fetch(`${API_BASE}/advisory/advise`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(params),
+    body: JSON.stringify({
+      ...params,
+      district: params.district.toLowerCase(),
+    }),
   });
-  if (!res.ok) throw new Error("Failed to generate advisory");
+  if (!res.ok) {
+    const errorBody = await res.json().catch(() => null);
+    throw new Error(errorBody?.detail || "Failed to generate advisory");
+  }
   return res.json();
 }
 

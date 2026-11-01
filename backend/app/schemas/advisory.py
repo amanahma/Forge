@@ -9,6 +9,7 @@ class AdvisoryRequest(BaseModel):
     crop_stage: Optional[str] = Field("Vegetative", example="Pod formation")
     soil_type: Optional[str] = Field("Black", example="Black")
     irrigation_type: Optional[str] = Field("Rainfed", example="Rainfed")
+    land_size_acres: Optional[float] = Field(2.5, example=3.5)
     language: str = Field("en", example="mr") # en, hi, bn, mr, ta, te
     query_text: Optional[str] = Field(None, example="Should I irrigate this week given the heat forecast?")
 
@@ -21,6 +22,7 @@ class MandiSignal(BaseModel):
     crop: str
     current_modal_price: float # INR / Quintal
     price_trend: str # "upward", "downward", "stable"
+    trend_7d_pct: Optional[float] = 0.0
     signal: str # "HOLD", "SELL_NOW", "GRADUAL_SELL"
     rationale: str
     data_source: str # "data.gov.in Agmarknet (Verified)"

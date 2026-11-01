@@ -65,18 +65,21 @@ export const FarmerAdvisoryTab: React.FC<FarmerAdvisoryTabProps> = ({
       setVillage("Mohol");
       setCrop("soybean");
       setSoilType("Black");
+      setIrrigationType("Rainfed");
     } else if (d === "Darbhanga") {
       setVillage("Kalyanpur");
       setCrop("rice");
       setSoilType("Alluvial");
+      setIrrigationType("Canal");
     } else {
       setVillage("Kurinjipadi");
       setCrop("rice");
       setSoilType("Sandy Loam");
+      setIrrigationType("Borewell");
     }
   };
 
-  const handleGenerateAdvisory = async () => {
+  const handleGenerateAdvisory = async (overrideQuery?: string) => {
     setLoading(true);
     setError(null);
     try {
@@ -87,7 +90,8 @@ export const FarmerAdvisoryTab: React.FC<FarmerAdvisoryTabProps> = ({
         language,
         soil_type: soilType,
         irrigation_type: irrigationType,
-        query_text: queryText,
+        land_size_acres: parseFloat(landSize) || 2.5,
+        query_text: overrideQuery !== undefined ? overrideQuery : queryText,
       });
       setAdvisoryData(data);
     } catch (err: any) {
@@ -134,7 +138,7 @@ export const FarmerAdvisoryTab: React.FC<FarmerAdvisoryTabProps> = ({
         setQueryText(transcript);
         setIsListening(false);
         // Automatically trigger advisory with spoken query
-        handleGenerateAdvisory();
+        handleGenerateAdvisory(transcript);
       };
 
       recognition.onerror = () => {
@@ -324,7 +328,7 @@ export const FarmerAdvisoryTab: React.FC<FarmerAdvisoryTabProps> = ({
             className="flex-1 bg-slate-800/80 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
           />
           <button
-            onClick={handleGenerateAdvisory}
+            onClick={() => handleGenerateAdvisory()}
             disabled={loading}
             className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center gap-1.5"
           >
@@ -332,6 +336,10 @@ export const FarmerAdvisoryTab: React.FC<FarmerAdvisoryTabProps> = ({
             <span>{t.getAdvisoryBtn}</span>
           </button>
         </div>
+
+        {error && (
+          <p className="mt-3 text-xs text-rose-400 font-semibold">⚠ {error}</p>
+        )}
       </div>
 
       {/* Advisory Content Grid */}
@@ -468,11 +476,15 @@ export const FarmerAdvisoryTab: React.FC<FarmerAdvisoryTabProps> = ({
                 <div className="flex items-center justify-center gap-1.5 mt-2">
                   {advisoryData.mandi_signal.price_trend === 'upward' ? (
                     <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
-                      <TrendingUp className="w-3.5 h-3.5" /> Upward Trend (+3.8%)
+                      <TrendingUp className="w-3.5 h-3.5" /> Upward Trend {advisoryData.mandi_signal.trend_7d_pct ? `(+${advisoryData.mandi_signal.trend_7d_pct}%)` : ''}
+                    </span>
+                  ) : advisoryData.mandi_signal.price_trend === 'downward' ? (
+                    <span className="text-xs font-bold text-rose-400 flex items-center gap-1">
+                      <TrendingDown className="w-3.5 h-3.5" /> Downward Trend {advisoryData.mandi_signal.trend_7d_pct ? `(${advisoryData.mandi_signal.trend_7d_pct}%)` : ''}
                     </span>
                   ) : (
-                    <span className="text-xs font-bold text-rose-400 flex items-center gap-1">
-                      <TrendingDown className="w-3.5 h-3.5" /> Downward Trend (-5.1%)
+                    <span className="text-xs font-bold text-slate-300 flex items-center gap-1">
+                      Stable Trend {advisoryData.mandi_signal.trend_7d_pct ? `(${advisoryData.mandi_signal.trend_7d_pct}%)` : ''}
                     </span>
                   )}
                 </div>
@@ -524,7 +536,11 @@ export const FarmerAdvisoryTab: React.FC<FarmerAdvisoryTabProps> = ({
                 </li>
                 <li className="flex justify-between">
                   <span className="text-slate-400">LLM Guardrail:</span>
-                  <span className="font-bold text-emerald-400">Passed (Zero Hallucination)</span>
+                  {advisoryData.provenance.guardrail_status === 'GROUNDED_AND_VERIFIED' ? (
+                    <span className="font-bold text-emerald-400">Passed (Zero Hallucination)</span>
+                  ) : (
+                    <span className="font-bold text-rose-400">{advisoryData.provenance.guardrail_status}</span>
+                  )}
                 </li>
               </ul>
             </div>
